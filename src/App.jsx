@@ -199,8 +199,8 @@ function App() {
       <header className="header">
         <h1>Belge Temizleyici</h1>
         <p className="subtitle">
-          Fotoğrafı çekilmiş belgeleri beyazlat, okunaklı hale getir — tamamı tarayıcında
-          çalışır, hiçbir görsel sunucuya gönderilmez.
+          Fotoğrafı çekilmiş belgeleri beyazlat ve çıktı almaya hazır hale getir — tamamı
+          tarayıcında çalışır, hiçbir görsel sunucuya gönderilmez.
         </p>
       </header>
 

@@ -1,6 +1,6 @@
 # Belge Temizleyici (Web)
 
-Fotoğrafı çekilmiş belgeleri tarayıcıda **beyazlatıp okunaklı hale getiren** bir web uygulaması.
+Fotoğrafı çekilmiş belgeleri **beyazlatan ve çıktı almaya hazır hale getiren** bir web uygulaması.
 BelgeTemizleyici (PyInstaller/tkinter) aracının modern web sürümü — aynı algoritma, saf JavaScript ile.
 
 ## Algoritma
