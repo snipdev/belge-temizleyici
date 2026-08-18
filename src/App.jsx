@@ -10,12 +10,17 @@ function App() {
   const [params, setParams] = useState(DEFAULTS)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [crop, setCrop] = useState(null)
+  const [cropMode, setCropMode] = useState(false)
+  const [liveDrag, setLiveDrag] = useState(null)
 
   const origCanvasRef = useRef(null)
+  const origWrapRef = useRef(null)
   const resultCanvasRef = useRef(null)
   const fullResCanvasRef = useRef(null)
   const imageRef = useRef(null)
   const debounceRef = useRef(null)
+  const draggingRef = useRef(false)
 
   const loadFile = useCallback((file) => {
     if (!file || !file.type.startsWith('image/')) return
@@ -23,6 +28,8 @@ function App() {
     const img = new Image()
     img.onload = () => {
       imageRef.current = img
+      setCrop(null)
+      setCropMode(false)
       setImage(url)
       setError('')
     }
@@ -48,19 +55,31 @@ function App() {
     origC.height = h
     const ctx = origC.getContext('2d')
     ctx.drawImage(img, 0, 0, w, h)
-    const src = ctx.getImageData(0, 0, w, h)
 
     setBusy(true)
     if (debounceRef.current) clearTimeout(debounceRef.current)
     debounceRef.current = setTimeout(() => {
       requestAnimationFrame(() => {
         try {
-          const out = cleanImage(src.data, w, h, params)
           const resC = resultCanvasRef.current
           resC.width = w
           resC.height = h
           const rctx = resC.getContext('2d')
-          rctx.putImageData(new ImageData(out, w, h), 0, 0)
+          rctx.putImageData(ctx.getImageData(0, 0, w, h), 0, 0)
+
+          if (crop) {
+            const sx = Math.round(crop.x0 * w)
+            const sy = Math.round(crop.y0 * h)
+            const sw = Math.max(1, Math.round((crop.x1 - crop.x0) * w))
+            const sh = Math.max(1, Math.round((crop.y1 - crop.y0) * h))
+            const region = ctx.getImageData(sx, sy, sw, sh)
+            const out = cleanImage(region.data, sw, sh, params)
+            rctx.putImageData(new ImageData(out, sw, sh), sx, sy)
+          } else {
+            const src = ctx.getImageData(0, 0, w, h)
+            const out = cleanImage(src.data, w, h, params)
+            rctx.putImageData(new ImageData(out, w, h), 0, 0)
+          }
           setBusy(false)
         } catch (e) {
           setBusy(false)
@@ -68,21 +87,83 @@ function App() {
         }
       })
     }, 160)
-  }, [image, params])
+  }, [image, params, crop])
 
   const setParam = (key) => (e) => setParams((p) => ({ ...p, [key]: Number(e.target.value) }))
+
+  const canvasPoint = (e) => {
+    const c = origCanvasRef.current
+    const rect = c.getBoundingClientRect()
+    return {
+      x: Math.min(1, Math.max(0, ((e.clientX - rect.left) / rect.width) * c.width / c.width)),
+      y: Math.min(1, Math.max(0, ((e.clientY - rect.top) / rect.height) * c.height / c.height)),
+    }
+  }
+
+  const onMouseDown = (e) => {
+    if (!cropMode) return
+    e.preventDefault()
+    draggingRef.current = true
+    const p = canvasPoint(e)
+    setLiveDrag({ x0: p.x, y0: p.y, x1: p.x, y1: p.y })
+  }
+
+  const onMouseMove = (e) => {
+    if (!draggingRef.current) return
+    e.preventDefault()
+    const p = canvasPoint(e)
+    setLiveDrag((d) => (d ? { ...d, x1: p.x, y1: p.y } : d))
+  }
+
+  const onMouseUp = () => {
+    if (!draggingRef.current) return
+    draggingRef.current = false
+    setLiveDrag((d) => {
+      if (!d) return d
+      const x0 = Math.min(d.x0, d.x1)
+      const x1 = Math.max(d.x0, d.x1)
+      const y0 = Math.min(d.y0, d.y1)
+      const y1 = Math.max(d.y0, d.y1)
+      if (x1 - x0 > 0.01 && y1 - y0 > 0.01) {
+        setCrop({ x0, y0, x1, y1 })
+      }
+      setCropMode(false)
+      return null
+    })
+  }
+
+  const rectStyle = (r) => {
+    if (!r) return null
+    return {
+      left: `${r.x0 * 100}%`,
+      top: `${r.y0 * 100}%`,
+      width: `${(r.x1 - r.x0) * 100}%`,
+      height: `${(r.y1 - r.y0) * 100}%`,
+    }
+  }
 
   const exportFull = () => {
     const img = imageRef.current
     if (!img) return
     const canvas = fullResCanvasRef.current
-    canvas.width = img.naturalWidth
-    canvas.height = img.naturalHeight
+    const nw = img.naturalWidth
+    const nh = img.naturalHeight
+    canvas.width = nw
+    canvas.height = nh
     const ctx = canvas.getContext('2d')
-    ctx.drawImage(img, 0, 0)
-    const src = ctx.getImageData(0, 0, canvas.width, canvas.height)
-    const out = cleanImage(src.data, canvas.width, canvas.height, params)
-    ctx.putImageData(new ImageData(out, canvas.width, canvas.height), 0, 0)
+    ctx.drawImage(img, 0, 0, nw, nh)
+
+    let sx = 0, sy = 0, sw = nw, sh = nh
+    if (crop) {
+      sx = Math.round(crop.x0 * nw)
+      sy = Math.round(crop.y0 * nh)
+      sw = Math.max(1, Math.round((crop.x1 - crop.x0) * nw))
+      sh = Math.max(1, Math.round((crop.y1 - crop.y0) * nh))
+    }
+
+    const src = ctx.getImageData(sx, sy, sw, sh)
+    const out = cleanImage(src.data, sw, sh, params)
+    ctx.putImageData(new ImageData(out, sw, sh), sx, sy)
     canvas.toBlob((blob) => {
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
@@ -108,6 +189,8 @@ function App() {
       <span className="slider-value">{params[key]}</span>
     </label>
   )
+
+  const cropBox = crop || liveDrag
 
   return (
     <div className="app">
@@ -154,6 +237,22 @@ function App() {
             {slider('Adaptif blok boyutu', 'block', 3, 99, 2)}
             {slider('Eşik sabiti (C)', 'c', 1, 60, 1)}
             <div className="control-group">
+              <button
+                className={`btn ${cropMode ? 'active' : ''}`}
+                onClick={() => setCropMode((m) => !m)}
+              >
+                {cropMode ? 'Kırpma çiz…' : 'Kırp'}
+              </button>
+              {crop && (
+                <button className="btn ghost" onClick={() => setCrop(null)}>
+                  Kırpmayı kaldır
+                </button>
+              )}
+            </div>
+            {cropMode && (
+              <p className="controls-hint">Orijinal resimde sürükleyerek kırpılacak alanı seç.</p>
+            )}
+            <div className="control-group">
               <button className="btn ghost" onClick={resetParams}>
                 Varsayılana dön
               </button>
@@ -163,14 +262,24 @@ function App() {
             </div>
             <p className="controls-hint">
               Ayar değiştikçe önizleme otomatik güncellenir; indirirken orijinal boyutta
-              işlenir.
+              işlenir. Kırpma varsa sadece o alan işlenip indirilir.
             </p>
           </aside>
 
           <main className="preview">
             <figure className="panel">
               <figcaption>Orijinal</figcaption>
-              <canvas ref={origCanvasRef} className="canvas" />
+              <div ref={origWrapRef} className="canvas-wrap">
+                <canvas
+                  ref={origCanvasRef}
+                  className="canvas"
+                  onMouseDown={onMouseDown}
+                  onMouseMove={onMouseMove}
+                  onMouseUp={onMouseUp}
+                  onMouseLeave={onMouseUp}
+                />
+                {cropBox && <div className="crop-overlay" style={rectStyle(cropBox)} />}
+              </div>
             </figure>
             <figure className="panel">
               <figcaption>Temizlenmiş</figcaption>
@@ -185,7 +294,7 @@ function App() {
 
       <footer className="footer">
         Algoritma: Gauss bulanıklığı ile zemin tahmini → ışık düzeltme (divide) → adaptif
-        eşikleme → beyazlatma.
+        eşikleme → beyazlatma. Kırpma ile sadece istenen bölge işlenir.
       </footer>
     </div>
   )
