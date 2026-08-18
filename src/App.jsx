@@ -62,20 +62,21 @@ function App() {
       requestAnimationFrame(() => {
         try {
           const resC = resultCanvasRef.current
-          resC.width = w
-          resC.height = h
           const rctx = resC.getContext('2d')
-          rctx.putImageData(ctx.getImageData(0, 0, w, h), 0, 0)
 
           if (crop) {
             const sx = Math.round(crop.x0 * w)
             const sy = Math.round(crop.y0 * h)
             const sw = Math.max(1, Math.round((crop.x1 - crop.x0) * w))
             const sh = Math.max(1, Math.round((crop.y1 - crop.y0) * h))
+            resC.width = sw
+            resC.height = sh
             const region = ctx.getImageData(sx, sy, sw, sh)
             const out = cleanImage(region.data, sw, sh, params)
-            rctx.putImageData(new ImageData(out, sw, sh), sx, sy)
+            rctx.putImageData(new ImageData(out, sw, sh), 0, 0)
           } else {
+            resC.width = w
+            resC.height = h
             const src = ctx.getImageData(0, 0, w, h)
             const out = cleanImage(src.data, w, h, params)
             rctx.putImageData(new ImageData(out, w, h), 0, 0)
@@ -148,10 +149,6 @@ function App() {
     const canvas = fullResCanvasRef.current
     const nw = img.naturalWidth
     const nh = img.naturalHeight
-    canvas.width = nw
-    canvas.height = nh
-    const ctx = canvas.getContext('2d')
-    ctx.drawImage(img, 0, 0, nw, nh)
 
     let sx = 0, sy = 0, sw = nw, sh = nh
     if (crop) {
@@ -161,9 +158,14 @@ function App() {
       sh = Math.max(1, Math.round((crop.y1 - crop.y0) * nh))
     }
 
-    const src = ctx.getImageData(sx, sy, sw, sh)
+    canvas.width = sw
+    canvas.height = sh
+    const ctx = canvas.getContext('2d')
+    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
+
+    const src = ctx.getImageData(0, 0, sw, sh)
     const out = cleanImage(src.data, sw, sh, params)
-    ctx.putImageData(new ImageData(out, sw, sh), sx, sy)
+    ctx.putImageData(new ImageData(out, sw, sh), 0, 0)
     canvas.toBlob((blob) => {
       const a = document.createElement('a')
       a.href = URL.createObjectURL(blob)
