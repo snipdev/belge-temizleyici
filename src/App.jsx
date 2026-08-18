@@ -43,7 +43,7 @@ function App() {
   }, [])
 
   useEffect(() => {
-    if (!imageRef.current) return
+    if (!image || !imageRef.current) return
     const img = imageRef.current
 
     const scale = Math.min(1, PREVIEW_MAX / Math.max(img.naturalWidth, img.naturalHeight))
@@ -177,6 +177,13 @@ function App() {
 
   const resetParams = () => setParams(DEFAULTS)
 
+  const resetImage = () => {
+    imageRef.current = null
+    setCrop(null)
+    setCropMode(false)
+    setImage(null)
+  }
+
   const slider = (label, key, min, max, step) => (
     <label className="slider">
       <span className="slider-label">{label}</span>
@@ -231,7 +238,7 @@ function App() {
         <div className="workspace">
           <aside className="controls">
             <div className="control-group">
-              <button className="btn" onClick={() => setImage(null)}>
+              <button className="btn" onClick={resetImage}>
                 ← Yeni resim
               </button>
             </div>
